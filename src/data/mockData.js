@@ -1,5 +1,3 @@
-// Sample Data for Showcase
-
 // Users for login
 export const users = [
   { username: "admin", password: "password", role: "admin" },

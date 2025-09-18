@@ -11,7 +11,7 @@ const ProtectedRoute = ({ children, role }) => {
   }
 
   if (user.role !== role) {
-    return <Navigate to="/login" replace />; // Or a custom unauthorized page
+    return <Navigate to="/login" replace />;
   }
 
   return children;

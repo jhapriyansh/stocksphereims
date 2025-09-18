@@ -1,4 +1,3 @@
-// File: src/components/StaffLayout.jsx
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
