@@ -22,13 +22,9 @@ const RequestStock = () => {
       status: "Pending",
       requestedBy: "staff",
     };
-
-    // NOTE: In a real app, this would be a POST request to an API.
-    // For showcase, we just log it and show a success message.
     console.log("New Stock Request:", newRequest);
     setMessage(`Successfully requested ${quantity} of ${item.name}.`);
 
-    // Reset form
     setSelectedSku("");
     setQuantity(1);
   };

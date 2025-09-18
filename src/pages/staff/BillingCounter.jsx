@@ -47,7 +47,6 @@ const BillingCounter = () => {
       return;
     }
 
-    // Generate Invoice
     const newInvoice = {
       id: `INV-2025-${(bills.length + 1).toString().padStart(3, "0")}`,
       date: new Date().toISOString().split("T")[0],
@@ -55,12 +54,9 @@ const BillingCounter = () => {
       total: calculateTotal(),
     };
 
-    // NOTE: In a real app, you would also update the master inventory data here.
-    // For this showcase, we won't mutate the imported mock data.
-
     setLastInvoice(newInvoice);
     setIsModalOpen(true);
-    setCart([]); // Clear cart
+    setCart([]); 
   };
 
   return (
