@@ -1,29 +1,36 @@
-import React, { createContext, useState, useContext } from "react";
+import React, { createContext, useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { users } from "../data/mockData";
+import { login as apiLogin } from "../services/api";
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const login = (username, password) => {
-    const foundUser = users.find(
-      (u) => u.username === username && u.password === password
-    );
-    if (foundUser) {
-      const userData = { username: foundUser.username, role: foundUser.role };
+  const login = async (email, password) => {
+    try {
+      const { data } = await apiLogin(email, password);
+      const userData = {
+        id: data._id,
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        token: data.token,
+      };
       setUser(userData);
-      localStorage.setItem("user", JSON.stringify(userData)); // Persist user
-      if (foundUser.role === "admin") {
+      localStorage.setItem("user", JSON.stringify(userData));
+      if (data.role === "admin") {
         navigate("/admin");
       } else {
         navigate("/staff");
       }
       return true;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {
@@ -33,11 +40,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Check for persisted user on initial load
-  useState(() => {
+  useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+    setLoading(false);
   }, []);
 
   return (

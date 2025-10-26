@@ -1,16 +1,39 @@
-import React from "react";
-import { inventory, stockRequests, bills } from "../../data/mockData";
+import React, { useEffect, useState } from "react";
+import { getProducts, getStockRequests, getBills } from "../../services/api";
 
 const AdminDashboard = () => {
+  const [inventory, setInventory] = useState([]);
+  const [stockRequests, setStockRequests] = useState([]);
+  const [bills, setBills] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [pRes, rRes, bRes] = await Promise.all([
+          getProducts(),
+          getStockRequests(),
+          getBills(),
+        ]);
+        setInventory(pRes.data || []);
+        setStockRequests(rRes.data || []);
+        setBills(bRes.data || []);
+      } catch (err) {
+        // keep silent for now; components can show nothing
+        console.error("Failed to load dashboard data", err);
+      }
+    };
+    load();
+  }, []);
+
   const totalStockValue = inventory.reduce(
-    (acc, item) => acc + item.quantity * item.price,
+    (acc, item) => acc + item.quantity * (item.price || 0),
     0
   );
   const lowStockItems = inventory.filter(
-    (item) => item.quantity < item.reorderPoint
+    (item) => item.quantity < (item.minStockLevel || 0)
   ).length;
   const pendingRequests = stockRequests.filter(
-    (req) => req.status === "Pending"
+    (req) => req.status === "pending"
   ).length;
 
   return (
@@ -37,4 +60,5 @@ const AdminDashboard = () => {
     </div>
   );
 };
+
 export default AdminDashboard;
