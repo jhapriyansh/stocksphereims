@@ -6,23 +6,28 @@ const StaffLayout = () => {
   const { logout } = useAuth();
   return (
     <div className="layout-container">
-      <aside className="sidebar">
-        <h2>StockSphere</h2>
+      <div className="sidebar">
+        <h2>StockSphere (Staff)</h2>
         <nav>
           <ul>
             <li>
-              <NavLink to="/staff/billing">Billing Counter</NavLink>
+              <NavLink to="billing">Billing Counter</NavLink>
             </li>
             <li>
-              <NavLink to="/staff/request-stock">Request Stock</NavLink>
+              <NavLink to="request-stock">Request Stock</NavLink>
             </li>
+            <hr style={{ margin: "10px 0", borderTop: "1px solid #eee" }} />
+            <li>
+              <NavLink to="/change-password">Change Password</NavLink>
+            </li>{" "}
+            {/* NEW LINK */}
           </ul>
         </nav>
         <button onClick={logout}>Logout</button>
-      </aside>
-      <main className="content">
+      </div>
+      <div className="content">
         <Outlet />
-      </main>
+      </div>
     </div>
   );
 };

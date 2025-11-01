@@ -1,23 +1,39 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom"; // 👈 CRITICAL FIX: Missing imports
+
 import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminLayout from "./components/AdminLayout";
+import StaffLayout from "./components/StaffLayout";
+import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import InventoryStatus from "./pages/admin/InventoryStatus";
 import ManageRequests from "./pages/admin/ManageRequests";
 import ViewBills from "./pages/admin/ViewBills";
+import UpdateProduct from "./pages/admin/UpdateProduct";
 import Analytics from "./pages/admin/Analytics";
 import BillingCounter from "./pages/staff/BillingCounter";
 import RequestStock from "./pages/staff/RequestStock";
-import AdminLayout from "./components/AdminLayout";
-import StaffLayout from "./components/StaffLayout";
-import ProtectedRoute from "./components/ProtectedRoute";
-import NotFound from "./pages/NotFound";
+
+// New feature imports:
+import ManageStaff from "./pages/admin/ManageStaff";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Navigate to="/login" />} />
+
+      {/* Change Password Page (Protected, accessible by both roles) */}
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute role={["admin", "staff"]}>
+            <ChangePassword />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Admin Routes */}
       <Route
@@ -33,7 +49,9 @@ function App() {
         <Route path="inventory" element={<InventoryStatus />} />
         <Route path="requests" element={<ManageRequests />} />
         <Route path="bills" element={<ViewBills />} />
+        <Route path="update-product" element={<UpdateProduct />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="manage-staff" element={<ManageStaff />} />
       </Route>
 
       {/* Staff Routes */}

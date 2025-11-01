@@ -1,14 +1,12 @@
 import axios from "axios";
 
-// Backend runs on port 5001 by default (avoid port 5000 system conflicts on macOS)
 const API_URL = "http://localhost:5001/api";
 
-// Create axios instance with base URL
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
 });
 
-// Add auth token to requests
 api.interceptors.request.use((config) => {
   const user = JSON.parse(localStorage.getItem("user"));
   if (user?.token) {
@@ -17,20 +15,32 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auth API
+// Auth API 
 export const login = (email, password) =>
-  api.post("/users/login", { email, password });
+  api.post("/users/login", { email, password }, { withCredentials: true });
 export const register = (userData) => api.post("/users/register", userData);
+export const logoutApi = () =>
+  api.post("/users/logout", {}, { withCredentials: true });
+export const verifyToken = () =>
+  api.get("/users/verify", { withCredentials: true });
 
-// Products API
+// NEW User Management API
+export const getUsers = () => api.get("/users");
+export const registerNewStaff = (userData) => api.post("/users", userData);
+export const deleteUser = (id, adminPassword) =>
+  api.delete(`/users/${id}`, { data: { adminPassword } });
+export const changePasswordApi = (data) => api.put("/users/password", data);
+
+
+// Products API 
 export const getProducts = () => api.get("/products");
 export const createProduct = (productData) =>
   api.post("/products", productData);
-export const updateProductQuantity = (id, quantity) =>
-  api.put(`/products/${id}/quantity`, { quantity });
+export const updateProductQuantity = (id, quantityData) => 
+  api.put(`/products/${id}/quantity`, quantityData); 
 export const getLowStockProducts = () => api.get("/products/low-stock");
 
-// Bills API
+// Bills API 
 export const createBill = (billData) => api.post("/bills", billData);
 export const getBills = () => api.get("/bills");
 export const getBillsByDateRange = (startDate, endDate) =>

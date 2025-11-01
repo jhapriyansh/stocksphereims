@@ -5,17 +5,21 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const { login } = useAuth();
+  const { login } = useAuth(); // Destructure the login function
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    try {
-      const success = await login(email, password);
-      if (!success) {
-        setError("Invalid email or password");
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+    // Clear previous errors on every new login attempt
+    setError(""); 
+
+    // The actual navigation and success/failure handling is primarily done inside useAuth().login
+    const success = await login(email, password);
+    
+    // If login fails (returns false from the context function), display a generic error.
+    if (!success) {
+      // Note: If you want specific error messages from the backend, 
+      // you must modify the login function in AuthContext to throw the error object.
+      setError("Invalid email or password"); 
     }
   };
 
@@ -33,7 +37,7 @@ const LoginPage = () => {
           />
           <input
             type="password"
-            placeholder="Password (password)"
+            placeholder="Password" // Removed "(password)" placeholder for security best practice
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
