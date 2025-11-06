@@ -8,34 +8,16 @@ const MobileScanner = () => {
   const [lastScanned, setLastScanned] = useState("");
   const [scanHistory, setScanHistory] = useState([]);
   const [manualBarcode, setManualBarcode] = useState("");
-  const [serverUrl, setServerUrl] = useState("");
-  const [showConfig, setShowConfig] = useState(true);
   const [scannerActive, setScannerActive] = useState(false);
   const html5QrcodeScannerRef = useRef(null);
 
+  // Auto-connect on mount
   useEffect(() => {
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-      if (html5QrcodeScannerRef.current) {
-        html5QrcodeScannerRef.current.clear().catch(() => {});
-      }
-    };
-  }, [socket]);
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
-  const connectToServer = () => {
-    if (!serverUrl.trim()) {
-      alert("Please enter server URL");
-      return;
-    }
+    console.log("🔌 Auto-connecting to:", SOCKET_URL);
 
-    // Clean up previous connection
-    if (socket) {
-      socket.disconnect();
-    }
-
-    const socketInstance = io(serverUrl, {
+    const socketInstance = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 1000,
@@ -45,7 +27,6 @@ const MobileScanner = () => {
     socketInstance.on("connect", () => {
       console.log("✅ Connected to server");
       setConnected(true);
-      setShowConfig(false);
     });
 
     socketInstance.on("disconnect", () => {
@@ -56,11 +37,17 @@ const MobileScanner = () => {
     socketInstance.on("connect_error", (error) => {
       console.error("Connection error:", error);
       setConnected(false);
-      alert("Failed to connect. Check server URL and network.");
     });
 
     setSocket(socketInstance);
-  };
+
+    return () => {
+      if (socketInstance) socketInstance.disconnect();
+      if (html5QrcodeScannerRef.current) {
+        html5QrcodeScannerRef.current.clear().catch(() => {});
+      }
+    };
+  }, []);
 
   const initializeScanner = () => {
     if (scannerActive) {
@@ -79,7 +66,7 @@ const MobileScanner = () => {
           fps: 10,
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
-          supportedScanTypes: [0, 1, 2, 3, 4, 5, 6, 7, 8], // All barcode types
+          supportedScanTypes: [0, 1, 2, 3, 4, 5, 6, 7, 8],
         },
         false
       );
@@ -88,9 +75,7 @@ const MobileScanner = () => {
         (decodedText) => {
           handleScan(decodedText);
         },
-        (error) => {
-          // Silently ignore scanning errors
-        }
+        (error) => {}
       );
 
       html5QrcodeScannerRef.current = scanner;
@@ -133,7 +118,6 @@ const MobileScanner = () => {
       ...prev.slice(0, 9),
     ]);
 
-    // Visual feedback
     if (navigator.vibrate) {
       navigator.vibrate(200);
     }
@@ -154,7 +138,6 @@ const MobileScanner = () => {
     if (html5QrcodeScannerRef.current) {
       html5QrcodeScannerRef.current.clear().catch(() => {});
     }
-    setShowConfig(true);
     setConnected(false);
     setScannerActive(false);
     setScanHistory([]);
@@ -178,39 +161,10 @@ const MobileScanner = () => {
         </div>
       </div>
 
-      {showConfig && (
+      {!connected && (
         <div style={styles.card}>
-          <h2 style={styles.cardTitle}>Server Configuration</h2>
-          <div style={styles.instructionsBox}>
-            <h3 style={styles.instructionsTitle}>📋 Setup Instructions:</h3>
-            <ol style={styles.instructionsList}>
-              <li>Make sure your phone and computer are on the same WiFi</li>
-              <li>
-                Find your computer's IP address:
-                <ul>
-                  <li>
-                    Mac/Linux:{" "}
-                    <code style={styles.code}>ifconfig | grep "inet "</code>
-                  </li>
-                  <li>
-                    Windows: <code style={styles.code}>ipconfig</code>
-                  </li>
-                </ul>
-              </li>
-              <li>Look for an address like 192.168.1.X or 10.0.0.X</li>
-              <li>Enter it below in this format: http://192.168.1.X:5001</li>
-            </ol>
-          </div>
-          <input
-            type="text"
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="http://192.168.1.100:5001"
-            style={styles.input}
-          />
-          <button onClick={connectToServer} style={styles.button}>
-            Connect to Server
-          </button>
+          <h2 style={styles.cardTitle}>⏳ Connecting...</h2>
+          <p style={styles.helpText}>Attempting to connect to server...</p>
         </div>
       )}
 
@@ -336,38 +290,11 @@ const styles = {
     color: "#333",
     marginTop: "0",
   },
-  instructionsBox: {
-    backgroundColor: "#f8f9fa",
-    padding: "15px",
-    borderRadius: "6px",
-    marginBottom: "15px",
-  },
-  instructionsTitle: {
-    fontSize: "16px",
-    marginTop: "0",
-    marginBottom: "10px",
-    color: "#495057",
-  },
-  instructionsList: {
-    fontSize: "14px",
-    color: "#666",
-    lineHeight: "1.6",
-    paddingLeft: "20px",
-    marginBottom: "0",
-  },
   helpText: {
     fontSize: "14px",
     color: "#666",
     marginBottom: "15px",
     lineHeight: "1.5",
-  },
-  code: {
-    backgroundColor: "#e9ecef",
-    padding: "2px 6px",
-    borderRadius: "3px",
-    fontSize: "13px",
-    fontFamily: "monospace",
-    color: "#495057",
   },
   input: {
     width: "100%",
