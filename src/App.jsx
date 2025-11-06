@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom"; // 👈 CRITICAL FIX: Missing imports
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -14,18 +14,19 @@ import UpdateProduct from "./pages/admin/UpdateProduct";
 import Analytics from "./pages/admin/Analytics";
 import BillingCounter from "./pages/staff/BillingCounter";
 import RequestStock from "./pages/staff/RequestStock";
-
-// New feature imports:
 import ManageStaff from "./pages/admin/ManageStaff";
 import ChangePassword from "./pages/ChangePassword";
+import MobileScanner from "./pages/MobileScanner";
 
 function App() {
   return (
     <Routes>
+      {/* PUBLIC ROUTES - NO AUTH NEEDED */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/scanner" element={<MobileScanner />} />
       <Route path="/" element={<Navigate to="/login" />} />
 
-      {/* Change Password Page (Protected, accessible by both roles) */}
+      {/* PROTECTED ROUTES - AUTH REQUIRED */}
       <Route
         path="/change-password"
         element={
@@ -35,7 +36,6 @@ function App() {
         }
       />
 
-      {/* Admin Routes */}
       <Route
         path="/admin"
         element={
@@ -54,7 +54,6 @@ function App() {
         <Route path="manage-staff" element={<ManageStaff />} />
       </Route>
 
-      {/* Staff Routes */}
       <Route
         path="/staff"
         element={

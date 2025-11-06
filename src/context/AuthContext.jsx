@@ -52,6 +52,10 @@ export const AuthProvider = ({ children }) => {
   // Check for persisted user and verify token on initial load
   useEffect(() => {
     const verifySession = async () => {
+      if (location.pathname === "/scanner") {
+        setLoading(false);
+        return;
+      }
       const storedUser = localStorage.getItem("user");
 
       console.log("🔍 Verifying session...");

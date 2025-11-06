@@ -1,117 +1,113 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { getProducts, createBill } from "../../services/api";
 import InvoiceModal from "../../components/InvoiceModal";
+import { io } from "socket.io-client";
 
 const BillingCounter = () => {
-  // Original states
   const [sku, setSku] = useState("");
   const [cart, setCart] = useState([]);
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
-  const [products, setProducts] = useState([]); // All available products
-
-  // New states for search/dropdown
+  const [products, setProducts] = useState([]);
+  const [socket, setSocket] = useState(null);
+  const [scannerConnected, setScannerConnected] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProductFromSearch, setSelectedProductFromSearch] =
     useState(null);
-
-  // New state for customer details
   const [customerName, setCustomerName] = useState("Walk-in Customer");
 
-  useEffect(() => {
-    // Initial fetch of products
-    fetchProducts();
-  }, []);
+  const productsRef = useRef([]);
 
   const fetchProducts = async () => {
     try {
+      console.log("📥 Fetching products...");
       const response = await getProducts();
-      // Filter out items with 0 quantity immediately
+      console.log("✅ Products fetched:", response.data);
+
       const availableProducts = response.data
         .filter((p) => p.quantity > 0)
         .sort((a, b) => a.name.localeCompare(b.name));
+
+      console.log("✅ Available products:", availableProducts);
       setProducts(availableProducts);
+      productsRef.current = availableProducts; // Keep ref updated
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("❌ Error fetching products:", error);
     }
   };
 
-  // Filtered list based on search input (Name or ID)
-  const filteredProducts = useMemo(() => {
-    if (!searchTerm) return [];
-
-    const lowerCaseSearch = searchTerm.toLowerCase();
-
-    return products
-      .filter(
-        (product) =>
-          // Search by name or ID
-          product.name.toLowerCase().includes(lowerCaseSearch) ||
-          product._id.toLowerCase().includes(lowerCaseSearch)
-      )
-      .slice(0, 10); // Limit results
-  }, [searchTerm, products]);
-
-  // Logic to update product list after adding an item to the cart (Fixes Bug 2)
-  const updateProductsAfterCartAdd = (itemAdded, quantityChange) => {
-    setProducts((prevProducts) => {
-      return prevProducts
-        .map((p) => {
-          if (p._id === itemAdded._id) {
-            const newQuantity = p.quantity - quantityChange;
-            return {
-              ...p,
-              quantity: newQuantity,
-            };
-          }
-          return p;
-        })
-        .filter((p) => p.quantity > 0); // Keep filtering out if stock hits 0
-    });
-  };
-
-  // Handler for adding items (used by both direct SKU input and search dropdown)
-  const handleAddItem = (e, itemToAdd = null) => {
-    e.preventDefault();
+  const addItemByBarcode = (barcode) => {
     setError("");
 
-    const item = itemToAdd || products.find((i) => i._id === sku);
+    console.log("🔍 Looking for product with barcode:", barcode);
+    console.log(
+      "📊 Available products:",
+      productsRef.current.map((p) => ({ id: p._id, name: p.name }))
+    );
+
+    const item = productsRef.current.find((i) => i._id === barcode);
 
     if (item) {
       if (item.quantity > 0) {
-        const existingCartItem = cart.find((ci) => ci._id === item._id);
+        setCart((prevCart) => {
+          const existingCartItem = prevCart.find((ci) => ci._id === item._id);
+          const currentStock = item.quantity;
+          const currentCartCount = existingCartItem
+            ? existingCartItem.quantity
+            : 0;
 
-        // Use the quantity from the `products` state for the current check
-        const currentStock =
-          products.find((p) => p._id === item._id)?.quantity || 0;
-        const currentCartCount = existingCartItem
-          ? existingCartItem.quantity
-          : 0;
-
-        if (currentCartCount + 1 <= currentStock) {
-          // 1. Update Cart
-          if (existingCartItem) {
-            setCart(
-              cart.map((ci) =>
+          if (currentCartCount + 1 <= currentStock) {
+            if (existingCartItem) {
+              return prevCart.map((ci) =>
                 ci._id === item._id ? { ...ci, quantity: ci.quantity + 1 } : ci
-              )
-            );
+              );
+            } else {
+              return [...prevCart, { ...item, quantity: 1 }];
+            }
           } else {
-            setCart([...cart, { ...item, quantity: 1 }]);
+            setError(
+              `Not enough stock for ${item.name}! Available: ${currentStock}`
+            );
+            return prevCart;
           }
+        });
 
-          // 2. Update the available Products list (Fixes Bug 2: real-time stock change)
-          updateProductsAfterCartAdd(item, 1);
-        } else {
-          setError(
-            `Not enough stock for ${item.name}! Available: ${currentStock}`
-          );
-        }
+        // Update products ref
+        productsRef.current = productsRef.current.map((p) => {
+          if (p._id === item._id) {
+            return { ...p, quantity: p.quantity - 1 };
+          }
+          return p;
+        });
+        setProducts([...productsRef.current]);
       } else {
-        // This case should not happen often due to the initial filter
         setError(`${item.name} is out of stock!`);
       }
+    } else {
+      setError("Item not found with barcode: " + barcode);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm) return [];
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    return products
+      .filter(
+        (product) =>
+          product.name.toLowerCase().includes(lowerCaseSearch) ||
+          product._id.toLowerCase().includes(lowerCaseSearch)
+      )
+      .slice(0, 10);
+  }, [searchTerm, products]);
+
+  const handleAddItem = (e, itemToAdd = null) => {
+    e.preventDefault();
+    setError("");
+    const item = itemToAdd || products.find((i) => i._id === sku);
+
+    if (item) {
+      addItemByBarcode(item._id);
     } else if (sku) {
       setError("Item not found!");
     }
@@ -153,7 +149,7 @@ const BillingCounter = () => {
           price: item.price,
         })),
         total: calculateTotal(),
-        customerName: customerName, // Include customer name (Fixes Bug 1)
+        customerName: customerName,
       };
 
       const response = await createBill(billData);
@@ -168,15 +164,14 @@ const BillingCounter = () => {
           price: p.price,
           sku: p.product?._id.slice(-4) || "N/A",
         })),
-        customerName: response.data.customerName, // Added to modal data
+        customerName: response.data.customerName,
       };
 
       setLastInvoice(newInvoice);
       setIsModalOpen(true);
       setCart([]);
-      setCustomerName("Walk-in Customer"); // Reset customer name
+      setCustomerName("Walk-in Customer");
 
-      // Full refresh of product list from server (optional, but safest)
       fetchProducts();
     } catch (error) {
       console.error("Error creating bill:", error);
@@ -187,12 +182,71 @@ const BillingCounter = () => {
     }
   };
 
+  useEffect(() => {
+    fetchProducts();
+
+    const SOCKET_URL =
+      import.meta.env.VITE_SOCKET_URL || "http://10.55.198.11:5001";
+
+    const socketInstance = io(SOCKET_URL, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 1000,
+    });
+
+    socketInstance.on("connect", () => {
+      console.log("✅ Connected to barcode scanner server");
+      setScannerConnected(true);
+    });
+
+    socketInstance.on("disconnect", () => {
+      console.log("❌ Disconnected from barcode scanner server");
+      setScannerConnected(false);
+    });
+
+    // Listen for scanned barcodes
+    socketInstance.on("add-to-cart", (data) => {
+      console.log("📦 Received barcode from scanner:", data);
+      if (data.barcode) {
+        addItemByBarcode(data.barcode);
+      }
+    });
+
+    setSocket(socketInstance);
+
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, []); // Empty dependency array - only runs once
+
   return (
     <div>
-      <h1>Billing Counter</h1>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <h1>Billing Counter</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span
+            style={{
+              width: "12px",
+              height: "12px",
+              borderRadius: "50%",
+              backgroundColor: scannerConnected ? "#28a745" : "#dc3545",
+              display: "inline-block",
+            }}
+          ></span>
+          <span style={{ fontSize: "14px", color: "#666" }}>
+            {scannerConnected ? "Scanner Connected" : "Scanner Disconnected"}
+          </span>
+        </div>
+      </div>
+
       <div className="billing-layout">
         <div className="card">
-          {/* Customer Name Field (Fixes Bug 1) */}
           <label htmlFor="customerName">Customer Name:</label>
           <input
             type="text"
@@ -203,9 +257,8 @@ const BillingCounter = () => {
             style={{ marginBottom: "15px" }}
           />
 
-          <h3>Scan Item ID or Search by Name</h3>
+          <h3>Search by Name</h3>
 
-          {/* 1. Search Block (Dropdown) */}
           <form onSubmit={handleAddSelectedToCart}>
             <input
               type="text"
@@ -215,10 +268,9 @@ const BillingCounter = () => {
                 setSku("");
                 setSelectedProductFromSearch(null);
               }}
-              placeholder="Search by Name or ID"
+              placeholder="Search by Product Name"
             />
 
-            {/* Conditional Dropdown Display */}
             {searchTerm &&
               filteredProducts.length > 0 &&
               !selectedProductFromSearch && (
@@ -243,14 +295,13 @@ const BillingCounter = () => {
                         borderBottom: "1px solid #eee",
                       }}
                     >
-                      <strong>{product.name}</strong> ({product._id.slice(-4)})
-                      - Stock: {product.quantity}
+                      <strong>{product.name}</strong> - Stock:{" "}
+                      {product.quantity}
                     </div>
                   ))}
                 </div>
               )}
 
-            {/* Display Selected Item for Confirmation */}
             {selectedProductFromSearch && (
               <p
                 style={{
@@ -261,8 +312,8 @@ const BillingCounter = () => {
                   backgroundColor: "#e9ffe9",
                 }}
               >
-                **Selected:** {selectedProductFromSearch.name} (Stock:{" "}
-                {selectedProductFromSearch.quantity})
+                <strong>Selected:</strong> {selectedProductFromSearch.name}{" "}
+                (Stock: {selectedProductFromSearch.quantity})
               </p>
             )}
 
@@ -271,29 +322,11 @@ const BillingCounter = () => {
             </button>
           </form>
 
-          <hr style={{ margin: "20px 0" }} />
-
-          {/* 2. Direct SKU Block */}
-          <form onSubmit={handleAddItem}>
-            <input
-              type="text"
-              value={sku}
-              onChange={(e) => {
-                setSku(e.target.value);
-                setSearchTerm("");
-                setSelectedProductFromSearch(null);
-              }}
-              placeholder="Or Enter Full Product ID (Barcode Scanner)"
-            />
-            <button type="submit">Add by ID</button>
-          </form>
-
           {error && <p style={{ color: "red", marginTop: "10px" }}>{error}</p>}
         </div>
 
         <div className="card">
           <h3>Current Bill</h3>
-          {/* ... (Cart rendering remains the same) ... */}
           {cart.length === 0 ? (
             <p>No items added yet.</p>
           ) : (
@@ -324,6 +357,7 @@ const BillingCounter = () => {
           </button>
         </div>
       </div>
+
       {lastInvoice && (
         <InvoiceModal
           isOpen={isModalOpen}
@@ -334,4 +368,5 @@ const BillingCounter = () => {
     </div>
   );
 };
+
 export default BillingCounter;
