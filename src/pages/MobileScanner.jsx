@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-import { Html5QrcodeScanner } from "html5-qrcode";
+// Import the scanner state for robust stopping
+import { Html5Qrcode, Html5QrcodeScannerState } from "html5-qrcode";
 
 const MobileScanner = () => {
   const [socket, setSocket] = useState(null);
@@ -9,12 +10,40 @@ const MobileScanner = () => {
   const [scanHistory, setScanHistory] = useState([]);
   const [manualBarcode, setManualBarcode] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
-  const html5QrcodeScannerRef = useRef(null);
+  const [cameras, setCameras] = useState([]);
+  const [selectedCamera, setSelectedCamera] = useState(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState(0);
+  const SCAN_COOLDOWN = 3000; // 3 seconds cooldown between scans
 
-  // Auto-connect on mount
+  // scannerRef will hold the Html5Qrcode instance
+  const scannerRef = useRef(null);
+
+  // This constant must match the ID in the JSX
+  const QR_READER_ID = "qr-reader";
+
+  // Effect 1: Get available cameras on mount
+  useEffect(() => {
+    Html5Qrcode.getCameras()
+      .then((devices) => {
+        console.log("Available cameras:", devices);
+        if (devices && devices.length) {
+          setCameras(devices);
+          // Try to select the back camera by default
+          const backCamera = devices.find((device) =>
+            device.label.toLowerCase().includes("back")
+          );
+          setSelectedCamera(backCamera ? backCamera.id : devices[0].id);
+        }
+      })
+      .catch((err) => {
+        console.error("Error getting cameras:", err);
+      });
+  }, []); // Runs once on mount
+
+  // Effect 2: Socket connection setup
   useEffect(() => {
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
-
     console.log("🔌 Auto-connecting to:", SOCKET_URL);
 
     const socketInstance = io(SOCKET_URL, {
@@ -41,86 +70,136 @@ const MobileScanner = () => {
 
     setSocket(socketInstance);
 
+    // Cleanup: disconnect socket on component unmount
     return () => {
       if (socketInstance) socketInstance.disconnect();
-      if (html5QrcodeScannerRef.current) {
-        html5QrcodeScannerRef.current.clear().catch(() => {});
+    };
+  }, []); // Runs once on mount
+
+  // Effect 3: Scanner cleanup on component unmount
+  useEffect(() => {
+    // Return a cleanup function
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current
+          .stop()
+          .then(() => console.log("Scanner stopped on unmount"))
+          .catch((err) =>
+            console.error("Error stopping scanner on unmount:", err)
+          );
       }
     };
-  }, []);
+  }, []); // Runs once on mount
 
-  const initializeScanner = () => {
-    if (scannerActive) {
-      alert("Scanner already active!");
+  const startScanner = async () => {
+    if (!selectedCamera) {
+      alert("No camera selected!");
       return;
     }
 
-    if (html5QrcodeScannerRef.current) {
-      html5QrcodeScannerRef.current.clear().catch(() => {});
+    // *** KEY FIX: Create the instance here ***
+    // This ensures the <div id="qr-reader"> exists
+    if (!scannerRef.current) {
+      scannerRef.current = new Html5Qrcode(QR_READER_ID);
     }
 
+    // Stop any existing scanner before starting a new one
+    await stopScanner();
+
     try {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
+      await scannerRef.current.start(
+        selectedCamera,
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          supportedScanTypes: [0, 1, 2, 3, 4, 5, 6, 7, 8],
         },
-        false
-      );
-
-      scanner.render(
         (decodedText) => {
           handleScan(decodedText);
         },
-        (error) => {}
+        (errorMessage) => {
+          // Ignore "QR code not found" messages
+        }
       );
-
-      html5QrcodeScannerRef.current = scanner;
       setScannerActive(true);
-    } catch (error) {
-      console.error("Scanner initialization error:", error);
-      alert("Failed to start scanner. Please check camera permissions.");
+    } catch (err) {
+      console.error("Error starting scanner:", err);
+      alert("Failed to start scanner: " + err.message);
+      setScannerActive(false);
     }
   };
 
-  const stopScanner = () => {
-    if (html5QrcodeScannerRef.current) {
-      html5QrcodeScannerRef.current
-        .clear()
-        .then(() => {
-          setScannerActive(false);
-          console.log("Scanner stopped");
-        })
-        .catch((err) => {
-          console.error("Error stopping scanner:", err);
-        });
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        // Only stop if it's currently scanning
+        if (
+          scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING
+        ) {
+          await scannerRef.current.stop();
+          console.log("Scanner stopped successfully");
+        }
+      } catch (err) {
+        console.error("Error stopping scanner:", err);
+      }
     }
+    setScannerActive(false);
   };
 
   const handleScan = (barcode) => {
+    const now = Date.now();
+
+    // Prevent scanning if:
+    // 1. Currently confirming a scan
+    // 2. Same code as last scan and within cooldown period
+    if (
+      isConfirming ||
+      (barcode === lastScanned && now - lastScanTime < SCAN_COOLDOWN)
+    ) {
+      return;
+    }
+
     if (!socket || !connected) {
       alert("Not connected to server!");
       return;
     }
 
-    console.log("📊 Sending barcode:", barcode);
-    socket.emit("barcode-scanned", { barcode });
-
+    // Update scan time and last scanned barcode immediately
+    setLastScanTime(now);
     setLastScanned(barcode);
-    setScanHistory((prev) => [
-      {
-        barcode,
-        time: new Date().toLocaleTimeString(),
-      },
-      ...prev.slice(0, 9),
-    ]);
 
+    // Set confirming state and pause scanner
+    setIsConfirming(true);
+
+    // Temporarily stop the scanner
+    if (scannerRef.current) {
+      scannerRef.current.pause();
+    }
+
+    // Vibrate to indicate scan
     if (navigator.vibrate) {
       navigator.vibrate(200);
     }
+
+    // Process the scan after a delay
+    setTimeout(() => {
+      console.log("📊 Sending barcode:", barcode);
+      socket.emit("barcode-scanned", { barcode });
+
+      setScanHistory((prev) => [
+        {
+          barcode,
+          time: new Date().toLocaleTimeString(),
+        },
+        ...prev.slice(0, 9),
+      ]);
+
+      setIsConfirming(false);
+
+      // Resume the scanner
+      if (scannerRef.current) {
+        scannerRef.current.resume();
+      }
+    }, 3000); // 3 second delay
   };
 
   const handleManualSubmit = (e) => {
@@ -135,11 +214,8 @@ const MobileScanner = () => {
     if (socket) {
       socket.disconnect();
     }
-    if (html5QrcodeScannerRef.current) {
-      html5QrcodeScannerRef.current.clear().catch(() => {});
-    }
+    stopScanner(); // Use the robust stopScanner function
     setConnected(false);
-    setScannerActive(false);
     setScanHistory([]);
     setLastScanned("");
   };
@@ -172,15 +248,29 @@ const MobileScanner = () => {
         <>
           <div style={styles.card}>
             <h2 style={styles.cardTitle}>Camera Scanner</h2>
+            <select
+              style={styles.input}
+              value={selectedCamera || ""}
+              onChange={(e) => setSelectedCamera(e.target.value)}
+              disabled={scannerActive} // Disable while scanner is running
+            >
+              <option value="">Select a camera</option>
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.label || `Camera ${camera.id}`}
+                </option>
+              ))}
+            </select>
             <p style={styles.helpText}>
               {scannerActive
                 ? "Camera is active. Point at barcode to scan."
-                : "Click button below to start camera scanner."}
+                : "Select a camera and click Start to begin scanning."}
             </p>
             {!scannerActive ? (
               <button
-                onClick={initializeScanner}
+                onClick={startScanner}
                 style={{ ...styles.button, backgroundColor: "#28a745" }}
+                disabled={!selectedCamera}
               >
                 Start Camera Scanner
               </button>
@@ -192,7 +282,8 @@ const MobileScanner = () => {
                 Stop Scanner
               </button>
             )}
-            <div id="reader" style={styles.scannerContainer}></div>
+            {/* *** This ID must match the constant *** */}
+            <div id={QR_READER_ID} style={styles.scannerContainer}></div>
           </div>
 
           <div style={styles.card}>
@@ -243,6 +334,8 @@ const MobileScanner = () => {
     </div>
   );
 };
+
+// ... (styles object remains the same) ...
 
 const styles = {
   container: {
