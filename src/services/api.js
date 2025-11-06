@@ -2,13 +2,12 @@ import axios from "axios";
 
 // IMPORTANT: Replace with your computer's local IP address
 // Find it using: ifconfig | grep "inet " (Mac/Linux) or ipconfig (Windows)
-const API_URL = import.meta.env.VITE_API_URL || "http://10.36.74.4:5001";
+const API_URL = import.meta.env.VITE_API_URL;
 
 const api = axios.create({
-  baseURL: API_URL + "/api",  // ✅ NOW IT'S CORRECT: .../api
+  baseURL: API_URL + "/api", // ✅ NOW IT'S CORRECT: .../api
   withCredentials: true,
 });
-
 
 api.interceptors.request.use((config) => {
   const user = JSON.parse(localStorage.getItem("user"));

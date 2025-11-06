@@ -185,8 +185,7 @@ const BillingCounter = () => {
   useEffect(() => {
     fetchProducts();
 
-    const SOCKET_URL =
-      import.meta.env.VITE_SOCKET_URL || "http://10.55.198.11:5001";
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
     const socketInstance = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
