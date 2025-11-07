@@ -1,11 +1,9 @@
 import axios from "axios";
 
-// IMPORTANT: Replace with your computer's local IP address
-// Find it using: ifconfig | grep "inet " (Mac/Linux) or ipconfig (Windows)
 const API_URL = import.meta.env.VITE_API_URL;
 
 const api = axios.create({
-  baseURL: API_URL + "/api", // ✅ NOW IT'S CORRECT: .../api
+  baseURL: API_URL + "/api", 
   withCredentials: true,
 });
 

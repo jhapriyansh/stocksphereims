@@ -23,29 +23,20 @@ const BillingCounter = () => {
     try {
       console.log("📥 Fetching products...");
       const response = await getProducts();
-      console.log("✅ Products fetched:", response.data);
 
       const availableProducts = response.data
         .filter((p) => p.quantity > 0)
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      console.log("✅ Available products:", availableProducts);
       setProducts(availableProducts);
       productsRef.current = availableProducts; // Keep ref updated
     } catch (error) {
-      console.error("❌ Error fetching products:", error);
+      console.error("Error fetching products:", error);
     }
   };
 
   const addItemByBarcode = (barcode) => {
     setError("");
-
-    console.log("🔍 Looking for product with barcode:", barcode);
-    console.log(
-      "📊 Available products:",
-      productsRef.current.map((p) => ({ id: p._id, name: p.name }))
-    );
-
     const item = productsRef.current.find((i) => i._id === barcode);
 
     if (item) {
@@ -194,18 +185,15 @@ const BillingCounter = () => {
     });
 
     socketInstance.on("connect", () => {
-      console.log("✅ Connected to barcode scanner server");
       setScannerConnected(true);
     });
 
     socketInstance.on("disconnect", () => {
-      console.log("❌ Disconnected from barcode scanner server");
       setScannerConnected(false);
     });
 
     // Listen for scanned barcodes
     socketInstance.on("add-to-cart", (data) => {
-      console.log("📦 Received barcode from scanner:", data);
       if (data.barcode) {
         addItemByBarcode(data.barcode);
       }

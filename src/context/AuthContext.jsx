@@ -58,19 +58,12 @@ export const AuthProvider = ({ children }) => {
       }
       const storedUser = localStorage.getItem("user");
 
-      console.log("🔍 Verifying session...");
-      console.log("Stored user:", storedUser ? "Found" : "Not found");
-      console.log("Current path:", location.pathname);
-
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
-          console.log("📝 Parsed user:", parsedUser);
 
           // Verify token with backend
-          console.log("🔐 Calling verifyToken API...");
           const { data } = await verifyToken();
-          console.log("✅ Token verified successfully:", data);
 
           // If verification succeeds, update user data
           const userData = {
@@ -87,36 +80,26 @@ export const AuthProvider = ({ children }) => {
           const isOnLoginOrRoot =
             currentPath === "/login" || currentPath === "/";
 
-          console.log("Current path:", currentPath);
-          console.log("Should redirect:", isOnLoginOrRoot);
-
           if (isOnLoginOrRoot) {
             const path =
               data.role === "admin" ? "/admin/dashboard" : "/staff/billing";
-            console.log("🚀 Redirecting to:", path);
             navigate(path, { replace: true });
           } else {
             console.log("✓ Staying on current page");
           }
         } catch (error) {
-          console.error("❌ Session verification failed:", error);
-          console.error("Error response:", error.response?.data);
-
           // If verification fails, clear session and force login
           setUser(null);
           localStorage.removeItem("user");
 
           // Only navigate to login if not already there
           if (location.pathname !== "/login") {
-            console.log("🚀 Redirecting to login");
             navigate("/login", { replace: true });
           }
         }
       } else {
-        console.log("❌ No stored user found");
         // No stored user, redirect to login if not already there
         if (location.pathname !== "/login") {
-          console.log("🚀 Redirecting to login (no stored user)");
           navigate("/login", { replace: true });
         }
       }
